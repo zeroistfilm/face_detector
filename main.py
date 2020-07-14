@@ -1,16 +1,23 @@
 import cv2, dlib, sys
 import numpy as np
 
-scaler = 0.3
+scaler = 0.7
 
 # initialize face detector and shape predictor
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
 
 # load video
-cap = cv2.VideoCapture('samples/girl.mp4')
+#cap = cv2.VideoCapture('samples/3.mp4')
+cap = cv2.VideoCapture(0)
+
 # load overlay image
 overlay = cv2.imread('samples/ryan_transparent.png', cv2.IMREAD_UNCHANGED)
+
+
+K=np.array([[781.3524863867165, 0.0, 794.7118000552183], [0.0, 779.5071163774452, 561.3314451453386], [0.0, 0.0, 1.0]])
+D=np.array([[-0.042595202508066574], [0.031307765215775184], [-0.04104704724832258], [0.015343014605793324]])
+
 
 # overlay function
 def overlay_transparent(background_img, img_to_overlay_t, x, y, overlay_size=None):
@@ -45,20 +52,27 @@ face_sizes = []
 # loop
 while True:
   # read frame buffer from video
-  ret, img = cap.read()
-  if not ret:
-    break
+  ret, distorted_img = cap.read()
+#  if not ret:
+#    break
+  height, width, channel = distorted_img.shape
+  #matrix = cv2.getRotationMatrix2D((width/2, height/2), 270, 1)  
+  #img = cv2.warpAffine(img, matrix, (width, height))
+  
+
+  map1, map2 = cv2.fisheye.initUndistortRectifyMap(K, D, np.eye(3), K, (distorted_img.shape[0],distorted_img.shape[1]), cv2.CV_16SC2)
+  img = cv2.remap(distorted_img, map1, map2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
 
   # resize frame
   img = cv2.resize(img, (int(img.shape[1] * scaler), int(img.shape[0] * scaler)))
   ori = img.copy()
-
+ 
   # find faces
   if len(face_roi) == 0:
     faces = detector(img, 1)
   else:
     roi_img = img[face_roi[0]:face_roi[1], face_roi[2]:face_roi[3]]
-    # cv2.imshow('roi', roi_img)
+    cv2.imshow('roi', roi_img)
     faces = detector(roi_img)
 
   # no faces
@@ -76,7 +90,7 @@ while True:
 
     for s in shape_2d:
       cv2.circle(img, center=tuple(s), radius=1, color=(255, 255, 255), thickness=2, lineType=cv2.LINE_AA)
-
+    
     # compute face center
     center_x, center_y = np.mean(shape_2d, axis=0).astype(np.int)
 
@@ -94,17 +108,17 @@ while True:
     if len(face_sizes) > 10:
       del face_sizes[0]
     mean_face_size = int(np.mean(face_sizes) * 1.8)
-
+    
     # compute face roi
     face_roi = np.array([int(min_coords[1] - face_size / 2), int(max_coords[1] + face_size / 2), int(min_coords[0] - face_size / 2), int(max_coords[0] + face_size / 2)])
     face_roi = np.clip(face_roi, 0, 10000)
 
     # draw overlay on face
-    result = overlay_transparent(ori, overlay, center_x + 8, center_y - 25, overlay_size=(mean_face_size, mean_face_size))
-
+    #result = overlay_transparent(ori, overlay, center_x + 8, center_y - 25, overlay_size=(mean_face_size, mean_face_size))
+    
   # visualize
   cv2.imshow('original', ori)
   cv2.imshow('facial landmarks', img)
-  cv2.imshow('result', result)
+  #cv2.imshow('result', result)
   if cv2.waitKey(1) == ord('q'):
     sys.exit(1)
